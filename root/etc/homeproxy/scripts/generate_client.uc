@@ -183,7 +183,7 @@ cache_file_path = uci.get(uciconfig, ucicache, 'path');
 cache_store_rdrc = uci.get(uciconfig, ucicache, 'store_rdrc');
 cache_rdrc_timeout = uci.get(uciconfig, ucicache, 'rdrc_timeout');
 
-let clash_api = null;
+let  null;
 /* UCI config end */
 
 /* Config helper start */
@@ -703,8 +703,7 @@ clash_api = {
 	external_ui_download_url: uci.get(uciconfig, uciclashapi, 'external_ui_download_url'),
 	external_ui_download_detour: get_outbound(uci.get(uciconfig, uciclashapi, 'external_ui_download_detour')),
 	secret: uci.get(uciconfig, uciclashapi, 'secret'),
-	default_mode: uci.get(uciconfig, uciclashapi, 'default_mode') || 'rule',
-	proxy_providers: build_proxy_providers()
+	default_mode: uci.get(uciconfig, uciclashapi, 'default_mode') || 'rule'
 };
 /* Config helper end */
 
@@ -1223,7 +1222,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geoip-cn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/IPCIDR-CHINA@rule-set/cn.srs',
-			path: ruleset_default_path('geoip-cn', 'binary'),
 			download_detour: 'main-out'
 		});
 		push(config.route.rule_set, {
@@ -1231,7 +1229,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geosite-cn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/sing-geosite@rule-set-unstable/geosite-geolocation-cn.srs',
-			path: ruleset_default_path('geosite-cn', 'binary'),
 			download_detour: 'main-out'
 		});
 		push(config.route.rule_set, {
@@ -1239,7 +1236,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geosite-noncn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/sing-geosite@rule-set-unstable/geosite-geolocation-!cn.srs',
-			path: ruleset_default_path('geosite-noncn', 'binary'),
 			download_detour: 'main-out'
 		});
 	}
