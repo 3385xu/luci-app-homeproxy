@@ -22,7 +22,7 @@ jobs:
     env:
       TARGET: x86/64
       PACKAGE_NAME: luci-app-homeproxy
-      SING_BOX_VERSION: 1.13.13
+      SING_BOX_VERSION: 1.13.21
       SDK_URL: https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
       OPENWRT_BASE_URL: https://downloads.openwrt.org/releases/24.10.0
 
