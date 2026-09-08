@@ -7,6 +7,10 @@ on:
         description: 'Release tag'
         required: true
         default: '2.0.0'
+      sing_box_version:
+        description: 'Sing-box version'
+        required: true
+        default: '1.13.21'
       release_description:
         description: 'Release description'
         required: false
@@ -22,7 +26,7 @@ jobs:
     env:
       TARGET: x86/64
       PACKAGE_NAME: luci-app-homeproxy
-      SING_BOX_VERSION: 1.13.21
+      SING_BOX_VERSION: ${{ inputs.sing_box_version || '1.13.21' }}
       SDK_URL: https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
       OPENWRT_BASE_URL: https://downloads.openwrt.org/releases/24.10.0
 
@@ -84,6 +88,16 @@ jobs:
           mkdir -p ./sdk/package/sing-box
           rsync -a ./.github/openwrt-packages/sing-box/ ./sdk/package/sing-box/
 
+          # 1. 清理与新版本内核源码冲突的历史补丁（解除 1.13.13 强绑定）
+          rm -rf ./sdk/package/sing-box/patches
+
+          # 2. 动态修改 sing-box Makefile，升级为指定的版本并跳过旧校验和
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${SING_BOX_VERSION}/" ./sdk/package/sing-box/Makefile
+          sed -i "s/^PKG_HASH:=.*/PKG_HASH:=skip/" ./sdk/package/sing-box/Makefile
+          # 确保关键特性标签完整
+          sed -i 's/BUILD_TAGS:=.*/BUILD_TAGS:=with_clash_api,with_quic,with_dhcp,with_wireguard,with_ech,with_utls,with_gvisor/g' ./sdk/package/sing-box/Makefile
+
+          # 3. 设置 HomeProxy 版本
           PACKAGE_VERSION="${{ inputs.release_tag }}"
           PACKAGE_VERSION="${PACKAGE_VERSION#v}"
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${PACKAGE_VERSION}/" ./sdk/package/${PACKAGE_NAME}/Makefile
@@ -262,8 +276,8 @@ jobs:
             echo '  opkg install packages/deps/*.ipk || true'
             echo 'fi'
             echo ''
-            echo 'echo "Installing sing-box 1.13.13..."'
-            echo 'opkg install --force-reinstall --force-overwrite packages/sing-box_1.13.13_x86_64.ipk'
+            echo "echo \"Installing sing-box ${SING_BOX_VERSION}...\""
+            echo "opkg install --force-reinstall --force-overwrite packages/sing-box_${SING_BOX_VERSION}_x86_64.ipk"
             echo ''
             echo 'echo "Installing luci-app-homeproxy..."'
             echo 'opkg install --force-reinstall --force-overwrite packages/luci-app-homeproxy_*.ipk'
@@ -295,6 +309,7 @@ jobs:
           {
             export TZ='Asia/Shanghai'
             echo "编译时间：$(date '+%Y-%m-%d %H:%M:%S CST')"
+            echo "sing-box 内核版本：${SING_BOX_VERSION}"
             echo
             echo "Release description："
             if [ -n "$RELEASE_DESCRIPTION" ]; then
