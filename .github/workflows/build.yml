@@ -93,10 +93,10 @@ jobs:
           if [ -d ./package/feeds ]; then
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
-          
+
           # 同步语言包版本
           if [ -f ./feeds/luci/luci.mk ]; then
-            sed -i '/define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
+            sed -i '/^define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)$/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
           fi
 
       - name: Compile IPK packages
@@ -322,9 +322,10 @@ jobs:
           if [ -d ./package/feeds ]; then
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
-          # 核心修复：修补 feeds/luci/luci.mk，同步语言包版本，根治版本显示为 (0) 的问题
+
+          # 精确注入 VERSION 属性到 Package 定义块，避免误伤 install 脚本段
           if [ -f ./feeds/luci/luci.mk ]; then
-            sed -i '/define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
+            sed -i '/^define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)$/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
           fi
 
       - name: Compile APK packages
