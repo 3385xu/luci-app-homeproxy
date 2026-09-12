@@ -9,6 +9,8 @@ PKG_VERSION:=2.0.0
 PKG_RELEASE:=1
 
 LUCI_TITLE:=Sing-box proxy management platform for OpenWrt
+LUCI_VERSION:=${PACKAGE_VERSION}
+LUCI_RELEASE:=1
 LUCI_PKGARCH:=all
 LUCI_DEPENDS:= \
 	+sing-box \
