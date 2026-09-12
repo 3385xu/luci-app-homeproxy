@@ -45,6 +45,7 @@ const uciinfra = 'infra',
       ucirouting = 'routing',
       uciroutingnode = 'routing_node',
       uciroutingrule = 'routing_rule',
+      uciruleset = 'ruleset',         /* <--- 补上这一行！ */
       uciclashapi = 'clash_api',
       ucintp = 'ntp',
       ucicache = 'cache',
