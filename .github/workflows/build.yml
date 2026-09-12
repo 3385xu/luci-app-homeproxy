@@ -93,6 +93,11 @@ jobs:
           if [ -d ./package/feeds ]; then
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
+          
+          # 同步语言包版本
+          if [ -f ./feeds/luci/luci.mk ]; then
+            sed -i '/define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
+          fi
 
       - name: Compile IPK packages
         working-directory: sdk
@@ -162,8 +167,7 @@ jobs:
           }
 
           download_package() {
-            local package="$1"
-            local repo index filename deps dep
+            local package="$1" repo index filename deps dep
             case " $VISITED " in *" $package "*) return 0 ;; esac
             VISITED="$VISITED $package"
 
@@ -193,12 +197,12 @@ jobs:
             download_package "$package"
           done
 
-      - name: Create 24.10 IPK release bundle
+      - name: Create IPK release bundle
         env:
           RELEASE_VERSION: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          BUNDLE_DIR="homeproxy-${RELEASE_VERSION}-openwrt-24.10-x86_64-ipk"
+          BUNDLE_DIR="homeproxy-${RELEASE_VERSION}-x86_64-ipk"
           mkdir -p "$BUNDLE_DIR/packages/deps"
 
           cp artifacts_ipk/${PACKAGE_NAME}_${RELEASE_VERSION}.ipk "$BUNDLE_DIR/packages/"
@@ -240,19 +244,19 @@ jobs:
       - name: Upload IPK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: homeproxy-24.10-ipk
-          path: homeproxy-${{ inputs.release_tag }}-openwrt-24.10-x86_64-ipk.zip
+          name: homeproxy-ipk
+          path: homeproxy-${{ inputs.release_tag }}-x86_64-ipk.zip
 
   # =======================================================
-  # 轨道二：ImmortalWrt 25.12+ (APK 体系)
+  # 轨道二：OpenWrt 25.12 (APK 体系)
   # =======================================================
   build-apk-25-12:
     runs-on: ubuntu-22.04
     env:
       PACKAGE_NAME: luci-app-homeproxy
       SING_BOX_VERSION: ${{ inputs.sing_box_version || '1.13.21' }}
-      # 使用已切换为 apk-tools 构建体系的最新 Snapshot SDK
-      IMMORTALWRT_BASE_URL: https://downloads.immortalwrt.org/snapshots
+      # 改用 OpenWrt 25.12 官方稳定发布源与 SDK，彻底告别 snapshot 日期 ABI 冲突
+      OPENWRT_25_BASE_URL: https://downloads.openwrt.org/releases/25.12.0
 
     steps:
       - name: Checkout source tree
@@ -268,16 +272,12 @@ jobs:
         with:
           go-version: '1.24.7'
 
-      - name: Download ImmortalWrt 25.x (APK) SDK
+      - name: Download OpenWrt 25.12 SDK
         run: |
           set -euo pipefail
-          SDK_DIR_URL="${IMMORTALWRT_BASE_URL}/targets/x86/64/"
-          echo "Resolving 25.x SDK filename from: $SDK_DIR_URL"
-          SDK_FILE=$(curl -fsSL "$SDK_DIR_URL" | grep -oE "immortalwrt-sdk-x86-64_gcc-[^\"'>]+\.tar\.(zst|xz)" | head -n1)
-          if [ -z "$SDK_FILE" ]; then
-            echo "Error: Snapshot SDK not found."
-            exit 1
-          fi
+          SDK_DIR_URL="${OPENWRT_25_BASE_URL}/targets/x86/64/"
+          echo "Resolving 25.12 SDK from: $SDK_DIR_URL"
+          SDK_FILE=$(curl -fsSL "$SDK_DIR_URL" | grep -oE "openwrt-sdk-25\.12\.[0-9]+-x86-64_gcc-[^\"'>]+\.tar\.(zst|xz)" | head -n1 || echo "openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst")
           echo "Downloading $SDK_FILE..."
           curl -fsSL "${SDK_DIR_URL}${SDK_FILE}" -o "$SDK_FILE"
           mkdir -p sdk_apk
@@ -322,6 +322,10 @@ jobs:
           if [ -d ./package/feeds ]; then
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
+          # 核心修复：修补 feeds/luci/luci.mk，同步语言包版本，根治版本显示为 (0) 的问题
+          if [ -f ./feeds/luci/luci.mk ]; then
+            sed -i '/define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
+          fi
 
       - name: Compile APK packages
         working-directory: sdk_apk
@@ -339,18 +343,18 @@ jobs:
           find bin/packages -type f -name "*sing-box*.apk" -exec cp {} ../artifacts_apk/ \;
           find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" -exec cp {} ../artifacts_apk/ \;
 
-      - name: Download 25.12+ APK dependencies
+      - name: Download 25.12 APK dependencies
         run: |
           set -euo pipefail
           mkdir -p artifacts_apk/deps package-index-apk
 
           REPOS="
-          ${IMMORTALWRT_BASE_URL}/targets/x86/64/packages/
-          ${IMMORTALWRT_BASE_URL}/packages/x86_64/base/
-          ${IMMORTALWRT_BASE_URL}/packages/x86_64/packages/
-          ${IMMORTALWRT_BASE_URL}/packages/x86_64/luci/
-          ${IMMORTALWRT_BASE_URL}/packages/x86_64/routing/
-          ${IMMORTALWRT_BASE_URL}/packages/x86_64/telephony/
+          ${OPENWRT_25_BASE_URL}/targets/x86/64/packages/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/base/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/packages/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/luci/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/routing/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/telephony/
           "
 
           # 预先拉取仓库 HTML 目录索引
@@ -383,12 +387,12 @@ jobs:
             download_apk "$dep"
           done
 
-      - name: Create 25.12+ APK release bundle
+      - name: Create 25.12 APK release bundle
         env:
           RELEASE_VERSION: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          BUNDLE_DIR="homeproxy-${RELEASE_VERSION}-immortalwrt-25.12-x86_64-apk"
+          BUNDLE_DIR="homeproxy-${RELEASE_VERSION}-x86_64-apk"
           mkdir -p "$BUNDLE_DIR/packages/deps"
 
           # 归档主包
@@ -397,7 +401,7 @@ jobs:
             cp artifacts_apk/deps/*.apk "$BUNDLE_DIR/packages/deps/"
           fi
 
-          # 生成 25.12+ (apk) 专属安装脚本
+          # 生成 25.12 (apk) 专属安装脚本
           {
             echo '#!/bin/sh'
             echo 'set -eu'
@@ -406,7 +410,12 @@ jobs:
             echo 'echo "Installing HomeProxy for ImmortalWrt/OpenWrt 25.12+"'
             echo 'echo "======================================================"'
             echo ''
-            echo 'echo "Step 1: Installing offline dependencies (safe mode)..."'
+            echo '# 清理旧配置文件可能存在的 Windows UTF-8 BOM 头，防止触发 uci Parse error'
+            echo 'if [ -f /etc/config/homeproxy ]; then'
+            echo '  sed -i "1s/^\xef\xbb\xbf//" /etc/config/homeproxy 2>/dev/null || true'
+            echo 'fi'
+            echo ''
+            echo 'echo "Step 1: Installing offline dependencies..."'
             echo 'if ls packages/deps/*.apk >/dev/null 2>&1; then'
             echo '  for pkg in packages/deps/*.apk; do'
             echo '    apk add --allow-untrusted "$pkg" 2>/dev/null || true'
@@ -434,8 +443,8 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: homeproxy-25.12-apk
-          path: homeproxy-${{ inputs.release_tag }}-immortalwrt-25.12-x86_64-apk.zip
+          name: homeproxy-apk
+          path: homeproxy-${{ inputs.release_tag }}-x86_64-apk.zip
 
   # =======================================================
   # 任务 3: 双轨归档与 GitHub Release 发布
@@ -450,13 +459,13 @@ jobs:
       - name: Download 24.10 IPK Bundle
         uses: actions/download-artifact@v4
         with:
-          name: homeproxy-24.10-ipk
+          name: homeproxy-ipk
           path: release_assets
 
       - name: Download 25.12 APK Bundle
         uses: actions/download-artifact@v4
         with:
-          name: homeproxy-25.12-apk
+          name: homeproxy-apk
           path: release_assets
 
       - name: Create Release Notes
@@ -471,12 +480,12 @@ jobs:
             echo "- **Sing-box 内核版本**: \`${{ inputs.sing_box_version || '1.13.21' }}\`"
             echo
             echo "### 压缩包选型指南"
-            echo "1. **\`*-openwrt-24.10-x86_64-ipk.zip\`**"
+            echo "1. **\`homeproxy-${{ inputs.release_tag }}-x86_64-ipk.zip\`**"
             echo "   - 适用环境：ImmortalWrt / OpenWrt **24.10** 及历史版本（使用 \`opkg\` 包管理器）。"
             echo "   - 安装方式：解压后在终端运行 \`./install.sh\` 即可一键安装完整依赖与主包。"
             echo
-            echo "2. **\`*-immortalwrt-25.12-x86_64-apk.zip\`**"
-            echo "   - 适用环境：ImmortalWrt / OpenWrt **25.12 及新版快照**（使用 \`apk\` 包管理器）。"
+            echo "2. **\`homeproxy-${{ inputs.release_tag }}-x86_64-apk.zip\`**"
+            echo "   - 适用环境：OpenWrt / ImmortalWrt **25.12 及更新系统**（使用 \`apk\` 包管理器）。"
             echo "   - 安装方式：解压后在终端运行 \`./install.sh\`，调用 \`apk add --allow-untrusted\` 完成安装。"
             if [ -n "$RELEASE_DESCRIPTION" ]; then
               echo
@@ -503,5 +512,5 @@ jobs:
 
           gh release create "$RELEASE_VERSION" \
             release_assets/*.zip \
-            --title "HomeProxy $RELEASE_VERSION (sing-box ${{ inputs.sing_box_version || '1.14.0' }})" \
+            --title "HomeProxy $RELEASE_VERSION (sing-box ${{ inputs.sing_box_version || '1.13.21' }})" \
             --notes-file release_body.md
