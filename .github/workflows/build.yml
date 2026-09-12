@@ -307,8 +307,11 @@ jobs:
 
           PACKAGE_VERSION="${{ inputs.release_tag }}"
           PACKAGE_VERSION="${PACKAGE_VERSION#v}"
+
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${PACKAGE_VERSION}/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
           sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=1/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
+          echo "LUCI_VERSION:=${PACKAGE_VERSION}" >> ./sdk_apk/package/${PACKAGE_NAME}/Makefile
+          echo "LUCI_RELEASE:=1" >> ./sdk_apk/package/${PACKAGE_NAME}/Makefile
 
           mkdir -p ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy
           printf '%s\n' "$PACKAGE_VERSION" > ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy/version
@@ -339,6 +342,9 @@ jobs:
           make package/${PACKAGE_NAME}/compile V=s -j"$(nproc)"
 
           mkdir -p ../artifacts_apk
+          PACKAGE_VERSION="${{ inputs.release_tag }}"
+          PACKAGE_VERSION="${PACKAGE_VERSION#v}"
+
           # 提取 SDK 原生生成的 .apk 产物
           find bin/packages -type f -name "${PACKAGE_NAME}*.apk" -exec cp {} ../artifacts_apk/ \;
           find bin/packages -type f -name "*sing-box*.apk" -exec cp {} ../artifacts_apk/ \;
