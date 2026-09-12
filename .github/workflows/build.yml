@@ -375,13 +375,11 @@ jobs:
                 fi
               fi
             done
-            echo "Notice: Optional remote dependency $pkg not found in base repos."
+            echo "Notice: Dependency $pkg not found in base repos."
           }
 
-          for dep in \
-            firewall4 dnsmasq-full ip-full ca-bundle curl jsonfilter unzip \
-            ucode-mod-digest ucode-mod-fs ucode-mod-math ucode-mod-ubus ucode-mod-uci \
-            luci-i18n-base-zh-cn; do
+          # 仅下载纯用户态工具，坚决排除与内核/系统强绑定的 dnsmasq-full、jsonfilter 等底层包
+          for dep in ca-bundle curl unzip ucode-mod-digest luci-i18n-base-zh-cn; do
             download_apk "$dep"
           done
 
@@ -408,9 +406,11 @@ jobs:
             echo 'echo "Installing HomeProxy for ImmortalWrt/OpenWrt 25.12+"'
             echo 'echo "======================================================"'
             echo ''
-            echo 'echo "Step 1: Installing offline dependencies (if present)..."'
+            echo 'echo "Step 1: Installing offline dependencies (safe mode)..."'
             echo 'if ls packages/deps/*.apk >/dev/null 2>&1; then'
-            echo '  apk add --allow-untrusted packages/deps/*.apk || true'
+            echo '  for pkg in packages/deps/*.apk; do'
+            echo '    apk add --allow-untrusted "$pkg" 2>/dev/null || true'
+            echo '  done'
             echo 'fi'
             echo ''
             echo "echo \"Step 2: Installing sing-box ${SING_BOX_VERSION} and HomeProxy...\""
