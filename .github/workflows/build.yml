@@ -349,10 +349,17 @@ jobs:
           find bin/packages -type f -name "${PACKAGE_NAME}*.apk" -exec cp {} ../artifacts_apk/ \;
           find bin/packages -type f -name "*sing-box*.apk" -exec cp {} ../artifacts_apk/ \;
           #find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" -exec cp {} ../artifacts_apk/ \;
-          # 3. 提取语言包并规整命名（如果生成了 -0.apk，自动校正为真实版本）
-          I18N_APK="$(find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" | head -n1)"
-          if [ -n "$I18N_APK" ]; then
-            cp "$I18N_APK" "../artifacts_apk/luci-i18n-homeproxy-zh-cn-${PACKAGE_VERSION}-r1.apk"
+          # 核心修复：重构语言包内部的 .PKGINFO，根治版本为 0 的问题
+          I18N_RAW="$(find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" | head -n1)"
+          if [ -n "$I18N_RAW" ]; then
+            echo "正在修复语言包内置元数据版本..."
+            mkdir -p /tmp/i18n_repack
+            tar -C /tmp/i18n_repack -xzf "$I18N_RAW"
+            # 强行将内部清单的 pkgver 修改为实际版本
+            sed -i "s/^pkgver = .*/pkgver = ${PACKAGE_VERSION}-r1/" /tmp/i18n_repack/.PKGINFO
+            # 重新打包为标准格式 APK
+            tar -C /tmp/i18n_repack -czf "../artifacts_apk/luci-i18n-homeproxy-zh-cn-${PACKAGE_VERSION}-r1.apk" .
+            rm -rf /tmp/i18n_repack
           fi
 
       - name: Download 25.12 APK dependencies
@@ -418,14 +425,17 @@ jobs:
             echo '#!/bin/sh'
             echo 'set -eu'
             echo 'cd "$(dirname "$0")"'
+            echo ''
             echo 'echo "======================================================"'
-            echo 'echo "Installing HomeProxy for ImmortalWrt/OpenWrt 25.12+"'
+            echo 'echo "Installing HomeProxy for OpenWrt 25.12+ (APK)"'
             echo 'echo "======================================================"'
             echo ''
-            echo '# 清理旧配置文件可能存在的 Windows UTF-8 BOM 头，防止触发 uci Parse error'
-            echo 'if [ -f /etc/config/homeproxy ]; then'
-            echo '  sed -i "1s/^\xef\xbb\xbf//" /etc/config/homeproxy 2>/dev/null || true'
-            echo 'fi'
+            echo '# 步骤 0: 彻底清洗 /etc/config/ 下所有文件开头的 UTF-8 BOM 头，防止 uci 抛出 line 1 byte 0 错误'
+            echo 'for cfg in /etc/config/homeproxy /etc/config/luci; do'
+            echo '  if [ -f "$cfg" ]; then'
+            echo '    sed -i "1s/^\xef\xbb\xbf//" "$cfg" 2>/dev/null || true'
+            echo '  fi'
+            echo 'done'
             echo ''
             echo 'echo "Step 1: Installing offline dependencies..."'
             echo 'if ls packages/deps/*.apk >/dev/null 2>&1; then'
@@ -437,15 +447,14 @@ jobs:
             echo "echo \"Step 2: Installing sing-box ${SING_BOX_VERSION} and HomeProxy...\""
             echo 'apk add --allow-untrusted packages/*.apk'
             echo ''
-            echo 'echo "Step 3: Configuring LuCI language and services..."'
+            echo 'echo "Step 3: Setting language and clearing cache..."'
             echo "uci set luci.main.lang='zh_cn' 2>/dev/null || true"
             echo 'uci commit luci 2>/dev/null || true'
             echo 'rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true'
             echo '/etc/init.d/rpcd restart 2>/dev/null || true'
             echo '/etc/init.d/uhttpd restart 2>/dev/null || true'
-            echo ''
             echo 'echo "======================================================"'
-            echo 'echo "APK Installation completed successfully!"'
+            echo 'echo "Done. All packages installed successfully!"'
             echo 'echo "======================================================"'
           } > "$BUNDLE_DIR/install.sh"
           chmod +x "$BUNDLE_DIR/install.sh"
