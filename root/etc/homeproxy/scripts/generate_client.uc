@@ -183,7 +183,7 @@ cache_file_path = uci.get(uciconfig, ucicache, 'path');
 cache_store_rdrc = uci.get(uciconfig, ucicache, 'store_rdrc');
 cache_rdrc_timeout = uci.get(uciconfig, ucicache, 'rdrc_timeout');
 
-let  null;
+let clash_api = null;
 /* UCI config end */
 
 /* Config helper start */
