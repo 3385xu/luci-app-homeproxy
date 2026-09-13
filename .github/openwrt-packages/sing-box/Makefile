@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=sing-box
-PKG_VERSION:=1.13.13
+PKG_VERSION:=1.13.21
 PKG_RELEASE:=2
 
 PKG_SOURCE:=v$(PKG_VERSION).tar.gz
