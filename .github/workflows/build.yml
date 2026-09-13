@@ -94,11 +94,6 @@ jobs:
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
 
-          # 同步语言包版本
-          if [ -f ./feeds/luci/luci.mk ]; then
-            sed -i '/^define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)$/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
-          fi
-
       - name: Compile IPK packages
         working-directory: sdk
         run: |
@@ -142,9 +137,7 @@ jobs:
           }
 
           package_field() {
-            local index="$1"
-            local package="$2"
-            local field="$3"
+            local index="$1" package="$2" field="$3"
             awk -v pkg="$package" -v field="$field" '
               BEGIN { RS=""; FS="\n" }
               $0 ~ "(^|\n)Package: " pkg "(\n|$)" {
@@ -159,18 +152,8 @@ jobs:
             ' "$index"
           }
 
-          normalize_depends() {
-            tr ',' '\n' |
-              sed -E 's/^\s+//; s/\s+$//; s/ \(.+\)//; s/\|.*$//' |
-              grep -E '^[A-Za-z0-9_.+-]+$' |
-              grep -Ev '^(libc|kernel)$' || true
-          }
-
           download_package() {
-            local package="$1" repo index filename deps dep
-            case " $VISITED " in *" $package "*) return 0 ;; esac
-            VISITED="$VISITED $package"
-
+            local package="$1" repo index filename
             for repo in $REPOS; do
               fetch_index "$repo"
               index="package-index-ipk/$(printf '%s' "$repo" | sed 's#https\?://##; s#[/:]#_#g').Packages"
@@ -178,22 +161,13 @@ jobs:
               if [ -n "$filename" ]; then
                 echo "Downloading IPK dependency: $package"
                 curl -fsSL "$repo/$filename" -o "artifacts_ipk/deps/${filename##*/}"
-                deps="$(package_field "$index" "$package" "Depends")"
-                if [ -n "$deps" ]; then
-                  printf '%s\n' "$deps" | normalize_depends | while IFS= read -r dep; do
-                    [ -z "$dep" ] || download_package "$dep"
-                  done
-                fi
                 return 0
               fi
             done
           }
 
-          VISITED=" sing-box ${PACKAGE_NAME} "
-          for package in \
-            firewall4 dnsmasq-full ip-full kmod-tun kmod-nft-tproxy \
-            ca-bundle curl jsonfilter unzip ucode-mod-digest ucode-mod-fs \
-            ucode-mod-math ucode-mod-ubus ucode-mod-uci luci-i18n-base-zh-cn; do
+          # 仅下载纯用户态工具，避免覆盖系统底层核心组件
+          for package in ca-bundle curl unzip ucode-mod-digest luci-i18n-base-zh-cn; do
             download_package "$package"
           done
 
@@ -308,14 +282,10 @@ jobs:
           PACKAGE_VERSION="${{ inputs.release_tag }}"
           PACKAGE_VERSION="${PACKAGE_VERSION#v}"
 
-          # 1. 规范写入主包版本
+          # 规范写入主包版本
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${PACKAGE_VERSION}/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
           sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=1/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
           
-          # 2. 核心：在 Makefile 头部直接固化 LUCI_VERSION，让自动衍生的 i18n 语言包原生继承真实版本号
-          sed -i "1i LUCI_VERSION:=${PACKAGE_VERSION}" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
-          sed -i "2i LUCI_RELEASE:=1" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
-
           mkdir -p ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy
           printf '%s\n' "$PACKAGE_VERSION" > ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy/version
 
@@ -329,39 +299,23 @@ jobs:
             find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
           fi
 
-          # 精确注入 VERSION 属性到 Package 定义块，避免误伤 install 脚本段
-          if [ -f ./feeds/luci/luci.mk ]; then
-            sed -i '/^define Package\/luci-i18n-\$(LUCI_BASENAME)-\$(1)$/a \  VERSION:=\$(PKG_VERSION)-\$(PKG_RELEASE)' ./feeds/luci/luci.mk
-          fi
-
       - name: Compile APK packages
         working-directory: sdk_apk
         run: |
           set -euo pipefail
-          PACKAGE_VERSION="${{ inputs.release_tag }}"
-          PACKAGE_VERSION="${PACKAGE_VERSION#v}"
-
           echo "CONFIG_PACKAGE_luci-i18n-homeproxy-zh-cn=m" >> .config
           echo "CONFIG_LUCI_LANG_zh_Hans=m" >> .config
           make defconfig
 
           # 编译内核
           make package/sing-box/compile V=s -j"$(nproc)"
-          
-          # 编译 HomeProxy 及其语言包，同时传入版本变量兜底
-          make package/${PACKAGE_NAME}/compile V=s -j"$(nproc)" \
-            LUCI_VERSION="${PACKAGE_VERSION}" \
-            LUCI_RELEASE="1"
+          make package/${PACKAGE_NAME}/compile V=s -j"$(nproc)"
 
           mkdir -p ../artifacts_apk
-
           # 提取 SDK 原生编译出来的正规产物（保留原生的 Zstandard/APK 复合格式结构，不拆包）
           find bin/packages -type f -name "${PACKAGE_NAME}*.apk" -exec cp {} ../artifacts_apk/ \;
           find bin/packages -type f -name "*sing-box*.apk" -exec cp {} ../artifacts_apk/ \;
           find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" -exec cp {} ../artifacts_apk/ \;
-
-          echo "====== 编译产出的 APK 列表 ======"
-          ls -la ../artifacts_apk/
 
       - name: Download 25.12 APK dependencies
         run: |
@@ -399,7 +353,6 @@ jobs:
                 fi
               fi
             done
-            echo "Notice: Dependency $pkg not found in base repos."
           }
 
           # 仅下载纯用户态工具，坚决排除与内核/系统强绑定的 dnsmasq-full、jsonfilter 等底层包
