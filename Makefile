@@ -8,6 +8,9 @@ PKG_NAME:=luci-app-homeproxy
 PKG_VERSION:=2.0.0
 PKG_RELEASE:=1
 
+PKG_PO_VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)
+override VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)
+
 LUCI_TITLE:=Sing-box proxy management platform for OpenWrt
 LUCI_PKGARCH:=all
 LUCI_DEPENDS:= \
