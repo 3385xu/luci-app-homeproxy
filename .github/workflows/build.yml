@@ -456,7 +456,7 @@ jobs:
             echo
             echo "### 压缩包选型指南"
             echo "1. **\`homeproxy-${{ inputs.release_tag }}-x86_64-ipk.zip\`**"
-            echo "   - 适用环境：ImmortalWrt / OpenWrt **24.10** 及历史版本（使用 \`opkg\` 包管理器）。"
+            echo "   - 适用环境：OpenWrt / ImmortalWrt **24.10** 及历史版本（使用 \`opkg\` 包管理器）。"
             echo "   - 安装方式：解压后在终端运行 \`./install.sh\` 即可一键安装完整依赖与主包。"
             echo
             echo "2. **\`homeproxy-${{ inputs.release_tag }}-x86_64-apk.zip\`**"
