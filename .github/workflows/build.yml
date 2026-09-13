@@ -1,4 +1,4 @@
-name: Build and Release IPK
+name: Build and Release IPK & APK
 
 on:
   workflow_dispatch:
@@ -222,10 +222,210 @@ jobs:
           path: homeproxy-${{ inputs.release_tag }}-x86_64-ipk.zip
 
   # =======================================================
+  # 轨道二：OpenWrt 25.12 (APK 体系)
+  # =======================================================
+  build-apk-25-12:
+    runs-on: ubuntu-22.04
+    env:
+      PACKAGE_NAME: luci-app-homeproxy
+      SING_BOX_VERSION: ${{ inputs.sing_box_version || '1.13.21' }}
+      # 改用 OpenWrt 25.12 官方稳定发布源与 SDK，彻底告别 snapshot 日期 ABI 冲突
+      OPENWRT_25_BASE_URL: https://downloads.openwrt.org/releases/25.12.0
+
+    steps:
+      - name: Checkout source tree
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget curl xz-utils zstd zip
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.7'
+
+      - name: Download OpenWrt 25.12 SDK
+        run: |
+          set -euo pipefail
+          SDK_DIR_URL="${OPENWRT_25_BASE_URL}/targets/x86/64/"
+          echo "Resolving 25.12 SDK from: $SDK_DIR_URL"
+          SDK_FILE=$(curl -fsSL "$SDK_DIR_URL" | grep -oE "openwrt-sdk-25\.12\.[0-9]+-x86-64_gcc-[^\"'>]+\.tar\.(zst|xz)" | head -n1 || echo "openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst")
+          echo "Downloading $SDK_FILE..."
+          curl -fsSL "${SDK_DIR_URL}${SDK_FILE}" -o "$SDK_FILE"
+          mkdir -p sdk_apk
+          tar --strip-components=1 -C sdk_apk -xaf "$SDK_FILE"
+
+      - name: Prepare package for APK
+        run: |
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='sdk*' \
+            --exclude='artifacts*' \
+            ./ ./sdk_apk/package/${PACKAGE_NAME}/
+
+          find ./sdk_apk/package -type d -name sing-box -prune -exec rm -rf {} +
+          if [ -d ./sdk_apk/feeds ]; then
+            find ./sdk_apk/feeds -type d -name sing-box -prune -exec rm -rf {} +
+          fi
+          mkdir -p ./sdk_apk/package/sing-box
+          rsync -a ./.github/openwrt-packages/sing-box/ ./sdk_apk/package/sing-box/
+
+          rm -rf ./sdk_apk/package/sing-box/patches
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${SING_BOX_VERSION}/" ./sdk_apk/package/sing-box/Makefile
+          sed -i "s/^PKG_HASH:=.*/PKG_HASH:=skip/" ./sdk_apk/package/sing-box/Makefile
+          sed -i 's/BUILD_TAGS:=.*/BUILD_TAGS:=with_clash_api,with_quic,with_dhcp,with_wireguard,with_ech,with_utls,with_gvisor/g' ./sdk_apk/package/sing-box/Makefile
+
+          PACKAGE_VERSION="${{ inputs.release_tag }}"
+          PACKAGE_VERSION="${PACKAGE_VERSION#v}"
+
+          # 规范写入主包版本
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${PACKAGE_VERSION}/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
+          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=1/" ./sdk_apk/package/${PACKAGE_NAME}/Makefile
+          
+          mkdir -p ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy
+          printf '%s\n' "$PACKAGE_VERSION" > ./sdk_apk/package/${PACKAGE_NAME}/root/usr/share/homeproxy/version
+
+      - name: Update feeds
+        working-directory: sdk_apk
+        run: |
+          set -euo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          if [ -d ./package/feeds ]; then
+            find ./package/feeds -type d -name sing-box -prune -exec rm -rf {} +
+          fi
+
+      - name: Compile APK packages
+        working-directory: sdk_apk
+        run: |
+          set -euo pipefail
+          echo "CONFIG_PACKAGE_luci-i18n-homeproxy-zh-cn=m" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=m" >> .config
+          make defconfig
+
+          # 编译内核
+          make package/sing-box/compile V=s -j"$(nproc)"
+          make package/${PACKAGE_NAME}/compile V=s -j"$(nproc)"
+
+          mkdir -p ../artifacts_apk
+          # 提取 SDK 原生编译出来的正规产物（保留原生的 Zstandard/APK 复合格式结构，不拆包）
+          find bin/packages -type f -name "${PACKAGE_NAME}*.apk" -exec cp {} ../artifacts_apk/ \;
+          find bin/packages -type f -name "*sing-box*.apk" -exec cp {} ../artifacts_apk/ \;
+          find bin/packages -type f -name "luci-i18n-homeproxy-zh-cn*.apk" -exec cp {} ../artifacts_apk/ \;
+
+      - name: Download 25.12 APK dependencies
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts_apk/deps package-index-apk
+
+          REPOS="
+          ${OPENWRT_25_BASE_URL}/targets/x86/64/packages/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/base/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/packages/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/luci/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/routing/
+          ${OPENWRT_25_BASE_URL}/packages/x86_64/telephony/
+          "
+
+          # 预先拉取仓库 HTML 目录索引
+          for repo in $REPOS; do
+            name="$(printf '%s' "$repo" | sed 's#https\?://##; s#[/:]#_#g')"
+            curl -fsSL "$repo" > "package-index-apk/${name}.html" || true
+          done
+
+          # 针对 APK 依赖进行检索与匹配下载
+          download_apk() {
+            local pkg="$1"
+            for repo in $REPOS; do
+              local name="$(printf '%s' "$repo" | sed 's#https\?://##; s#[/:]#_#g')"
+              local index_file="package-index-apk/${name}.html"
+              if [ -f "$index_file" ]; then
+                local apk_name
+                apk_name=$(grep -oE "\b${pkg}-[0-9][^\"'>]+\.apk" "$index_file" | head -n1 || true)
+                if [ -n "$apk_name" ]; then
+                  echo "Downloading APK dependency: $apk_name"
+                  curl -fsSL "${repo}${apk_name}" -o "artifacts_apk/deps/${apk_name}" || true
+                  return 0
+                fi
+              fi
+            done
+          }
+
+          # 仅下载纯用户态工具，坚决排除与内核/系统强绑定的 dnsmasq-full、jsonfilter 等底层包
+          for dep in ca-bundle curl unzip ucode-mod-digest luci-i18n-base-zh-cn; do
+            download_apk "$dep"
+          done
+
+      - name: Create 25.12 APK release bundle
+        env:
+          RELEASE_VERSION: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="homeproxy-${RELEASE_VERSION}-x86_64-apk"
+          mkdir -p "$BUNDLE_DIR/packages/deps"
+
+          # 归档主包
+          cp artifacts_apk/*.apk "$BUNDLE_DIR/packages/" 2>/dev/null || true
+          if compgen -G "artifacts_apk/deps/*.apk" >/dev/null; then
+            cp artifacts_apk/deps/*.apk "$BUNDLE_DIR/packages/deps/"
+          fi
+
+          # 生成 25.12 (apk) 专属安装脚本
+          {
+            echo '#!/bin/sh'
+            echo 'set -eu'
+            echo 'cd "$(dirname "$0")"'
+            echo ''
+            echo 'echo "======================================================"'
+            echo 'echo "Installing HomeProxy for OpenWrt 25.12+ (APK)"'
+            echo 'echo "======================================================"'
+            echo ''
+            echo '# 步骤 0: 彻底清洗 /etc/config/ 下所有文件开头的 UTF-8 BOM 头，防止 uci 抛出 line 1 byte 0 错误'
+            echo 'for cfg in /etc/config/homeproxy /etc/config/luci; do'
+            echo '  if [ -f "$cfg" ]; then'
+            echo '    sed -i "1s/^\xef\xbb\xbf//" "$cfg" 2>/dev/null || true'
+            echo '  fi'
+            echo 'done'
+            echo ''
+            echo 'echo "Step 1: Installing offline dependencies..."'
+            echo 'if ls packages/deps/*.apk >/dev/null 2>&1; then'
+            echo '  for pkg in packages/deps/*.apk; do'
+            echo '    apk add --allow-untrusted "$pkg" 2>/dev/null || true'
+            echo '  done'
+            echo 'fi'
+            echo ''
+            echo "echo \"Step 2: Installing sing-box ${SING_BOX_VERSION} and HomeProxy...\""
+            echo 'apk add --allow-untrusted packages/*.apk'
+            echo ''
+            echo 'echo "Step 3: Setting language and clearing cache..."'
+            echo "uci set luci.main.lang='zh_cn' 2>/dev/null || true"
+            echo 'uci commit luci 2>/dev/null || true'
+            echo 'rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true'
+            echo '/etc/init.d/rpcd restart 2>/dev/null || true'
+            echo '/etc/init.d/uhttpd restart 2>/dev/null || true'
+            echo 'echo "======================================================"'
+            echo 'echo "Done. All packages installed successfully!"'
+            echo 'echo "======================================================"'
+          } > "$BUNDLE_DIR/install.sh"
+          chmod +x "$BUNDLE_DIR/install.sh"
+
+          zip -qr "${BUNDLE_DIR}.zip" "$BUNDLE_DIR"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: homeproxy-apk
+          path: homeproxy-${{ inputs.release_tag }}-x86_64-apk.zip
+
+  # =======================================================
   # 任务 3: 双轨归档与 GitHub Release 发布
   # =======================================================
   publish-release:
-    needs: [build-ipk-24-10]
+    needs: [build-ipk-24-10, build-apk-25-12]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -259,7 +459,9 @@ jobs:
             echo "   - 适用环境：OpenWrt / ImmortalWrt **24.10** 及历史版本（使用 \`opkg\` 包管理器）。"
             echo "   - 安装方式：解压后在终端运行 \`./install.sh\` 即可一键安装完整依赖与主包。"
             echo
-
+            echo "2. **\`homeproxy-${{ inputs.release_tag }}-x86_64-apk.zip\`**"
+            echo "   - 适用环境：OpenWrt / ImmortalWrt **25.12 及更新系统**（使用 \`apk\` 包管理器）。"
+            echo "   - 安装方式：解压后在终端运行 \`./install.sh\`，调用 \`apk add --allow-untrusted\` 完成安装。"
             if [ -n "$RELEASE_DESCRIPTION" ]; then
               echo
               echo "### 详细更新内容"
