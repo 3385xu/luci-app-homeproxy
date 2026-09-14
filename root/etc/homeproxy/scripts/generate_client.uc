@@ -1317,9 +1317,9 @@ if (!isEmpty(main_node)) {
 			tag: tag,
 			format: cfg.format,
 			url: cfg.url,
-			path: (cfg.type === 'remote') ? ruleset_remote_path(cfg.remote_path || cfg.path, tag, cfg.format) : cfg.path,
+			path: (cfg.type === 'local') ? cfg.path : null,
 			download_detour: get_outbound(cfg.outbound),
-			update_interval: (cfg.type === 'remote') ? '87600h' : null
+			update_interval: (cfg.type === 'remote') ? (cfg.update_interval || '1d') : null
 		});
 	});
 }
