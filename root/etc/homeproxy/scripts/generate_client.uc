@@ -1319,7 +1319,7 @@ if (!isEmpty(main_node)) {
 			url: cfg.url,
 			path: (cfg.type === 'local') ? cfg.path : null,
 			download_detour: get_outbound(cfg.outbound),
-			update_interval: (cfg.type === 'remote') ? (cfg.update_interval || '1d') : null
+			update_interval: (cfg.type === 'remote') ? '87600h' : null
 		});
 	});
 }
