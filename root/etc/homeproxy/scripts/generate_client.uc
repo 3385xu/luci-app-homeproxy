@@ -113,7 +113,7 @@ if (routing_mode !== 'custom') {
 	if (isEmpty(dns_server) || dns_server === 'wan')
 		dns_server = wan_dns;
 
-	if (routing_mode === 'bypass_mainland_china') {
+	 {
 		china_dns_server = uci.get(uciconfig, ucimain, 'china_dns_server');
 		if (isEmpty(china_dns_server) || type(china_dns_server) !== 'string' || china_dns_server === 'wan')
 			china_dns_server = wan_dns;
@@ -781,7 +781,7 @@ if (!isEmpty(main_node)) {
 			action: 'reject'
 		});
 
-	if (routing_mode === 'bypass_mainland_china') {
+	 {
 		push(config.dns.servers, {
 			tag: 'china-dns',
 			domain_resolver: {
@@ -1223,7 +1223,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geoip-cn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/IPCIDR-CHINA@rule-set/cn.srs',
-			path: ruleset_default_path('geoip-cn', 'binary'),
 			download_detour: 'main-out'
 		});
 		push(config.route.rule_set, {
@@ -1231,7 +1230,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geosite-cn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/sing-geosite@rule-set-unstable/geosite-geolocation-cn.srs',
-			path: ruleset_default_path('geosite-cn', 'binary'),
 			download_detour: 'main-out'
 		});
 		push(config.route.rule_set, {
@@ -1239,7 +1237,6 @@ if (!isEmpty(main_node)) {
 			tag: 'geosite-noncn',
 			format: 'binary',
 			url: 'https://fastly.jsdelivr.net/gh/1715173329/sing-geosite@rule-set-unstable/geosite-geolocation-!cn.srs',
-			path: ruleset_default_path('geosite-noncn', 'binary'),
 			download_detour: 'main-out'
 		});
 	}
