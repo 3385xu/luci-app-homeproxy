@@ -31,7 +31,7 @@ index bda6e23..8f84796 100644
  	"github.com/sagernet/sing/service/pause"
  
  	"go4.org/netipx"
-@@ -94,14 +97,36 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
+@@ -94,14 +97,38 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
  		dialer = s.outbound.Default()
  	}
  	s.dialer = dialer
@@ -52,13 +52,18 @@ index bda6e23..8f84796 100644
  		if savedSet := s.cacheFile.LoadRuleSet(s.options.Tag); savedSet != nil {
 -			err := s.loadBytes(savedSet.Content)
 -			if err != nil {
--				return E.Cause(err, "restore cached rule-set")
+-				s.logger.Warn(E.Cause(err, "restore cached rule-set, will refetch"))
+-			} else {
+-				s.lastUpdated = savedSet.LastUpdated
+-				s.lastEtag = savedSet.LastEtag
+-			}
 +			if !loadedFromPath && !pathMissing {
 +				err := s.loadBytes(savedSet.Content)
 +				if err != nil {
-+					return E.Cause(err, "restore cached rule-set")
++					s.logger.Warn(E.Cause(err, "restore cached rule-set, will refetch"))
++				} else {
++					s.lastUpdated = savedSet.LastUpdated
 +				}
-+				s.lastUpdated = savedSet.LastUpdated
 +			}
 +			if !pathMissing {
 +				if s.lastUpdated.IsZero() {
@@ -67,13 +72,11 @@ index bda6e23..8f84796 100644
 +				if s.lastEtag == "" {
 +					s.lastEtag = savedSet.LastEtag
 +				}
- 			}
--			s.lastUpdated = savedSet.LastUpdated
--			s.lastEtag = savedSet.LastEtag
++			}
  		}
  	}
  	if s.lastUpdated.IsZero() {
-@@ -159,6 +184,46 @@ func (s *RemoteRuleSet) UnregisterCallback(element *list.Element[adapter.RuleSet
+@@ -159,6 +186,46 @@ func (s *RemoteRuleSet) UnregisterCallback(element *list.Element[adapter.RuleSet
  	s.callbacks.Remove(element)
  }
  
@@ -103,7 +106,7 @@ index bda6e23..8f84796 100644
 +	return nil
 +}
 +
-+func (s *RemoteRuleSet) saveToPath(content []byte) error {
+ func (s *RemoteRuleSet) saveToPath(content []byte) error {
 +	path := s.localPath()
 +	if path == "" {
 +		return nil
@@ -115,12 +118,12 @@ index bda6e23..8f84796 100644
 +		return err
 +	}
 +	return filemanager.Chown(s.ctx, path)
-+}
-+
+ }
+ 
  func (s *RemoteRuleSet) loadBytes(content []byte) error {
  	var (
  		ruleSet option.PlainRuleSetCompat
-@@ -308,6 +373,11 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
+@@ -308,6 +375,11 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
  			s.logger.Error("save rule-set cache: ", err)
  		}
  	}
