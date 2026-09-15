@@ -31,7 +31,7 @@ index bda6e23..8f84796 100644
  	"github.com/sagernet/sing/service/pause"
  
  	"go4.org/netipx"
-@@ -94,14 +97,38 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
+@@ -97,15 +99,37 @@ func (s *RemoteRuleSet) StartContext(ctx context.Context, startContext *adapter.
  		dialer = s.outbound.Default()
  	}
  	s.dialer = dialer
@@ -76,7 +76,7 @@ index bda6e23..8f84796 100644
  		}
  	}
  	if s.lastUpdated.IsZero() {
-@@ -159,6 +186,46 @@ func (s *RemoteRuleSet) UnregisterCallback(element *list.Element[adapter.RuleSet
+@@ -159,6 +183,46 @@ func (s *RemoteRuleSet) UnregisterCallback(element *list.Element[adapter.RuleSet
  	s.callbacks.Remove(element)
  }
  
@@ -106,7 +106,7 @@ index bda6e23..8f84796 100644
 +	return nil
 +}
 +
- func (s *RemoteRuleSet) saveToPath(content []byte) error {
++func (s *RemoteRuleSet) saveToPath(content []byte) error {
 +	path := s.localPath()
 +	if path == "" {
 +		return nil
@@ -118,12 +118,12 @@ index bda6e23..8f84796 100644
 +		return err
 +	}
 +	return filemanager.Chown(s.ctx, path)
- }
- 
++}
++
  func (s *RemoteRuleSet) loadBytes(content []byte) error {
  	var (
  		ruleSet option.PlainRuleSetCompat
-@@ -308,6 +375,11 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
+@@ -308,6 +372,11 @@ func (s *RemoteRuleSet) fetch(ctx context.Context, startContext *adapter.HTTPSta
  			s.logger.Error("save rule-set cache: ", err)
  		}
  	}
