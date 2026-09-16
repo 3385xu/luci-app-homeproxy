@@ -73,6 +73,9 @@ jobs:
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${SING_BOX_VERSION}/" ./sdk/package/sing-box/Makefile
           sed -i "s/^PKG_HASH:=.*/PKG_HASH:=skip/" ./sdk/package/sing-box/Makefile
 
+          # 新增 放宽 GOTOOLCHAIN 限制
+          sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/g' ./sdk/package/sing-box/Makefile 2>/dev/null || true
+
           PACKAGE_VERSION="${{ inputs.release_tag }}"
           PACKAGE_VERSION="${PACKAGE_VERSION#v}"
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${PACKAGE_VERSION}/" ./sdk/package/${PACKAGE_NAME}/Makefile
@@ -273,6 +276,9 @@ jobs:
 
           sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${SING_BOX_VERSION}/" ./sdk_apk/package/sing-box/Makefile
           sed -i "s/^PKG_HASH:=.*/PKG_HASH:=skip/" ./sdk_apk/package/sing-box/Makefile
+
+          # 新增 放宽 GOTOOLCHAIN 限制
+          sed -i 's/GOTOOLCHAIN=local/GOTOOLCHAIN=auto/g' ./sdk/package/sing-box/Makefile 2>/dev/null || true
 
           PACKAGE_VERSION="${{ inputs.release_tag }}"
           PACKAGE_VERSION="${PACKAGE_VERSION#v}"
