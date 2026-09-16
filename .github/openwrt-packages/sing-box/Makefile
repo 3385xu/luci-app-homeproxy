@@ -12,8 +12,8 @@ PKG_SOURCE_URL:=https://github.com/SagerNet/sing-box/archive/refs/tags
 PKG_HASH:=skip
 PKG_BUILD_DIR:=$(BUILD_DIR)/sing-box-$(PKG_VERSION)
 
-# 完整支持原版所有高级特性的构建标签
-BUILD_TAGS:=with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,with_naive_outbound,badlinkname,tfogo_checklinkname0,with_musl
+# 纯静态模式下支持的最全特性 Tags（剔除必须依赖 CGO 的 with_naive_outbound 和 with_musl）
+BUILD_TAGS:=with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,badlinkname,tfogo_checklinkname0
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -26,7 +26,7 @@ define Package/sing-box
 endef
 
 define Package/sing-box/description
-  sing-box $(PKG_VERSION) source-built static package for x86_64 OpenWrt.
+  sing-box $(PKG_VERSION) source-built static package for x86_64 OpenWrt with full pure-go features.
 endef
 
 define Build/Compile
